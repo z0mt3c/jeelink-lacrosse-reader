@@ -54,7 +54,7 @@ class Reader extends EventEmitter {
     const match = data.match(this.options.pattern)
     if (match) {
       const type = parseInt(match[2])
-      const temperature = (4 * 256 + parseInt(match[4]) - 1000) / 10
+      const temperature = (parseInt(match[3]) * 256 + parseInt(match[4]) - 1000) / 10
       const humidity = parseInt(match[5])
 
       var message = {
@@ -63,7 +63,8 @@ class Reader extends EventEmitter {
         temperature: temperature,
         humidity: humidity % 128,
         newBattery: type > 128,
-        weakBattery: humidity > 128
+        weakBattery: humidity > 128,
+        raw: data
       }
 
       this._lastMessage = message
