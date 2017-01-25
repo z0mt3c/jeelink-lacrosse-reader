@@ -9,8 +9,7 @@ const defaultOptions = {
     databits: 8,
     stopbits: 1,
     parity: 'none',
-    buffersize: 2048,
-    parser: SerialPort.parsers.raw
+    buffersize: 1028
   },
   pattern: /OK 9 ([0-9]+)\s+([0-9]+)\s+([0-9]+)\s+([0-9]+)\s+([0-9]+)/,
   maxChunkSize: 4096,
@@ -21,11 +20,15 @@ class Reader extends EventEmitter {
   constructor (options) {
     super()
     this.options = Hoek.applyToDefaults(defaultOptions, options || {})
+
+    if (!this.options.portOptions.parser) {
+      this.options.portOptions.parser = SerialPort.parsers.readline('\r\n')
+    }
+
     if (this.options.autoStart) this.start()
   }
 
   start () {
-    this._chunk = ''
     this._port = new SerialPort(this.options.port, this.options.portOptions)
     this._port.on('data', this._onData.bind(this))
     this._port.on('error', this._onError.bind(this))
@@ -36,14 +39,6 @@ class Reader extends EventEmitter {
   }
 
   _onData (data) {
-    // Avoid leaks
-    if (this._chunk.length > this.options.maxChunkSize) {
-      console.warn('Chunk length too large - reset')
-      this._chunk = ''
-    }
-
-    this._chunk += data.toString()
-
     // OK 9 49 1   4   182 54     ID = 49  T: 20.6  H: 54  no NewBatt
     // OK 9 55 129 4   192 56     ID = 55  T: 21.6  H: 56  WITH NewBatt 
     // OK 9 ID XXX XXX XXX XXX
@@ -56,9 +51,8 @@ class Reader extends EventEmitter {
     // |  |------------------- fix "9"
     // |---------------------- fix "OK"
 
-    const match = this._chunk.match(this.options.pattern)
+    const match = data.match(this.options.pattern)
     if (match) {
-      this._chunk = this._chunk.substr(match.index + match[0].length)
       const type = parseInt(match[2])
       const temperature = (4 * 256 + parseInt(match[4]) - 1000) / 10
       const humidity = parseInt(match[5])
@@ -74,9 +68,6 @@ class Reader extends EventEmitter {
 
       this._lastMessage = message
       this.emit('data', message)
-      this._chunk = ''
-    } else {
-      // message incomplete
     }
   }
 
